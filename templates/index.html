@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>领票系统</title>
+<style>
+body { font-family: sans-serif; max-width: 400px; margin: 40px auto; }
+input { width: 100%; padding: 10px; font-size: 18px; }
+button { width: 100%; padding: 10px; margin-top: 10px; font-size: 18px; }
+</style>
+</head>
+<body>
+
+<h2>电子领票系统</h2>
+<input id="sid" placeholder="请输入学号">
+<button onclick="submit()">确认领取</button>
+
+<p id="result"></p>
+
+<script>
+function submit(){
+    let sid = document.getElementById("sid").value.trim();
+    let formData = new FormData();
+    formData.append("student_id", sid);
+
+    fetch("/ticket", { method: "POST", body: formData })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById("result").innerHTML =
+                data.msg + (data.seat ? " 座位号：" + data.seat : "");
+        })
+        .catch(() => {
+            document.getElementById("result").innerHTML = "出错，请重试";
+        });
+}
+</script>
+
+</body>
+</html>
