@@ -70,6 +70,7 @@ def ticket():
 def lookup():
     student_id = request.args.get("sid", "").strip()
     users = load_json("users.json")
+
     if student_id in users:
         return jsonify({"seat": users[student_id]})
     return jsonify({"seat": None, "msg": "未领取"})
