@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>管理员 - 票务系统</title>
+<style>
+body{font-family: sans-serif; max-width: 900px; margin:20px auto}
+section{border:1px solid #ddd;padding:12px;margin-bottom:12px}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #eee;padding:6px;text-align:left}
+</style>
+</head>
+<body>
+<h2>管理员面板</h2>
+<div id="stats"></div>
+
+<section>
+  <h3>座位管理</h3>
+  <button onclick="loadSeats()">刷新座位</button>
+  <button onclick="showAddSeat()">新增座位</button>
+  <div id="seats"></div>
+</section>
+
+<section>
+  <h3>用户管理</h3>
+  <button onclick="loadUsers()">刷新用户</button>
+  <button onclick="showAddUser()">新增用户</button>
+  <div id="users"></div>
+</section>
+
+<section>
+  <h3>有效学号（valid_ids）</h3>
+  <button onclick="loadValidids()">刷新</button>
+  <div id="validids"></div>
+  <div>
+    <input id="new_valid" placeholder="学号">
+    <button onclick="addValid()">添加</button>
+  </div>
+</section>
+
+<script>
+function fetchJson(url, opts){
+  return fetch(url, opts).then(r=>{
+    if(!r.ok) return r.json().then(j=>{throw j});
+    return r.json();
+  })
+}
+
+function loadStats(){
+  fetchJson('/admin/api/stats').then(j=>{
+    document.getElementById('stats').innerHTML =
+      `<b>座位总数</b>: ${j.total_seats} &nbsp; <b>已分配</b>: ${j.allocated} &nbsp; <b>未分配</b>: ${j.free} &nbsp; <b>用户数</b>: ${j.user_count}`;
+  }).catch(e=>console.error(e));
+}
+
+function loadSeats(){
+  fetchJson('/admin/api/seats').then(list=>{
+    let html = '<table><tr><th>seat_id</th><th>occupied</th><th>student_id</th><th>操作</th></tr>';
+    list.forEach(s=>{
+      html += `<tr><td>${s.seat_id}</td><td>${s.occupied}</td><td>${s.student_id||''}</td>`+
+              `<td><button onclick="delSeat('${s.seat_id}')">删除</button></td></tr>`;
+    })
+    html += '</table>';
+    document.getElementById('seats').innerHTML = html;
+    loadStats();
+  }).catch(e=>{document.getElementById('seats').innerText = JSON.stringify(e)});
+}
+
+function delSeat(id){
+  if(!confirm('删除座位 '+id+' ?')) return;
+  fetchJson('/admin/api/seats/'+id, {method:'DELETE'}).then(()=>loadSeats()).catch(e=>alert(JSON.stringify(e)));
+}
+
+function showAddSeat(){
+  let sid = prompt('输入新座位 seat_id');
+  if(!sid) return;
+  let occ = confirm('是否标记为已占用？点击确定则为已占用');
+  let student = null;
+  if(occ) student = prompt('请输入占用学号');
+  fetchJson('/admin/api/seats', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({seat_id:sid, occupied:occ, student_id:student})}).then(()=>loadSeats()).catch(e=>alert(JSON.stringify(e)));
+}
+
+function loadUsers(){
+  fetchJson('/admin/api/users').then(obj=>{
+    let html = '<table><tr><th>student_id</th><th>seat_id</th><th>操作</th></tr>';
+    Object.keys(obj).forEach(k=>{
+      html += `<tr><td>${k}</td><td>${obj[k]}</td><td><button onclick="delUser('${k}')">删除</button></td></tr>`;
+    })
+    html += '</table>';
+    document.getElementById('users').innerHTML = html;
+    loadStats();
+  }).catch(e=>{document.getElementById('users').innerText = JSON.stringify(e)});
+}
+
+function delUser(id){
+  if(!confirm('删除用户 '+id+' ?')) return;
+  fetchJson('/admin/api/users/'+id, {method:'DELETE'}).then(()=>loadUsers()).catch(e=>alert(JSON.stringify(e)));
+}
+
+function showAddUser(){
+  let sid = prompt('学号'); if(!sid) return;
+  let seat = prompt('座位号'); if(!seat) return;
+  fetchJson('/admin/api/users', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({student_id:sid, seat_id:seat})}).then(()=>loadUsers()).catch(e=>alert(JSON.stringify(e)));
+}
+
+function loadValidids(){
+  fetchJson('/admin/api/validids').then(list=>{
+    let html = '<ul>';
+    list.forEach(v=> html += `<li>${v} <button onclick="delValid('${v}')">删除</button></li>`);
+    html += '</ul>';
+    document.getElementById('validids').innerHTML = html;
+  }).catch(e=>document.getElementById('validids').innerText = JSON.stringify(e));
+}
+
+function addValid(){
+  let v = document.getElementById('new_valid').value.trim(); if(!v) return;
+  fetchJson('/admin/api/validids', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({student_id: v})}).then(()=>{document.getElementById('new_valid').value=''; loadValidids();}).catch(e=>alert(JSON.stringify(e)));
+}
+
+function delValid(v){
+  if(!confirm('删除学号 '+v+' ?')) return;
+  fetchJson('/admin/api/validids/'+v, {method:'DELETE'}).then(()=>loadValidids()).catch(e=>alert(JSON.stringify(e)));
+}
+
+// 初始加载
+loadStats(); loadSeats(); loadUsers(); loadValidids();
+</script>
+</body>
+</html>

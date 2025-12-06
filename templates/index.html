@@ -26,8 +26,13 @@ function submit(){
     fetch("/ticket", { method: "POST", body: formData })
         .then(r => r.json())
         .then(data => {
+            if (data && data.status === 'admin_redirect' && data.url) {
+                // 管理员密钥，跳转到受保护的 /admin（浏览器会提示 Basic Auth）
+                window.location.href = data.url;
+                return;
+            }
             document.getElementById("result").innerHTML =
-                data.msg + (data.seat ? " 座位号：" + data.seat : "");
+                (data.msg || '') + (data.seat ? " 座位号：" + data.seat : "");
         })
         .catch(() => {
             document.getElementById("result").innerHTML = "出错，请重试";
