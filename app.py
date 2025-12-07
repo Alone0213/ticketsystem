@@ -42,6 +42,14 @@ def init_db():
                 student_id TEXT PRIMARY KEY
             )
         ''')
+        # 新增 IP 地址领票记录表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ip_ticket_log (
+                ip_address TEXT PRIMARY KEY,
+                student_id TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         conn.commit()
 
 
@@ -74,6 +82,7 @@ def home():
 @app.route("/ticket", methods=["POST"])
 def ticket():
     student_id = request.form.get("student_id", "").strip()
+    client_ip = request.remote_addr  # 获取客户端 IP 地址
 
     # 特殊密钥：跳转到管理员页面（管理员页面受 Basic Auth 保护）
     if student_id == "xuanlan40":
@@ -87,6 +96,13 @@ def ticket():
             cursor.execute('SELECT * FROM valid_ids WHERE student_id = ?', (student_id,))
             if not cursor.fetchone():
                 return jsonify({"status": "fail", "msg": "学号不合法"}), 400
+            
+            # --- 检查 IP 地址领票限制 ---
+            cursor.execute('SELECT * FROM ip_ticket_log WHERE ip_address = ?', (client_ip,))
+            ip_ticket = cursor.fetchone()
+            
+            if ip_ticket:
+                return jsonify({"status": "fail", "msg": "同一 IP 地址只能领取一张票"}), 400
             
             # --- 已领取过 ---
             cursor.execute('SELECT seat_id FROM users WHERE student_id = ?', (student_id,))
@@ -107,10 +123,15 @@ def ticket():
             seat_id = available['seat_id']
             
             # --- 更新座位表和用户表 ---
-            cursor.execute('UPDATE seats SET occupied = 1, student_id = ? WHERE seat_id = ?', 
+            cursor.execute('UPDATE seats SET occupied = 1, student_id = ? WHERE seat_id = ?',
                          (student_id, seat_id))
-            cursor.execute('INSERT INTO users (student_id, seat_id) VALUES (?, ?)', 
+            cursor.execute('INSERT INTO users (student_id, seat_id) VALUES (?, ?)',
                          (student_id, seat_id))
+            
+            # --- 记录 IP 地址领票日志 ---
+            cursor.execute('INSERT INTO ip_ticket_log (ip_address, student_id) VALUES (?, ?)',
+                         (client_ip, student_id))
+            
             conn.commit()
             
             return jsonify({

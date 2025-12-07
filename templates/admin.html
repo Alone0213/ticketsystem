@@ -53,15 +53,40 @@ function loadStats(){
   }).catch(e=>console.error(e));
 }
 
+let seatsData = [];
+let seatsPage = 1;
+const seatsPageSize = 30;
+function renderSeatsPage() {
+  let start = (seatsPage-1)*seatsPageSize;
+  let end = start + seatsPageSize;
+  let pageData = seatsData.slice(start, end);
+  let html = '<table><tr><th>seat_id</th><th>pos</th><th>occupied</th><th>student_id</th><th>操作</th></tr>';
+  pageData.forEach(s=>{
+    html += `<tr><td>${s.seat_id}</td><td>${s.pos||''}</td><td>${s.occupied}</td><td>${s.student_id||''}</td>`+
+            `<td><button onclick="delSeat('${s.seat_id}')">删除</button></td></tr>`;
+  });
+  html += '</table>';
+  // 分页控件
+  let totalPages = Math.ceil(seatsData.length / seatsPageSize);
+  if(totalPages > 1) {
+    html += '<div style="margin:8px 0">';
+    for(let i=1;i<=totalPages;i++){
+      if(i===seatsPage) html += `<b>[${i}]</b> `;
+      else html += `<a href="#" onclick="gotoSeatsPage(${i});return false;">${i}</a> `;
+    }
+    html += '</div>';
+  }
+  document.getElementById('seats').innerHTML = html;
+}
+function gotoSeatsPage(p) {
+  seatsPage = p;
+  renderSeatsPage();
+}
 function loadSeats(){
   fetchJson('/admin/api/seats').then(list=>{
-    let html = '<table><tr><th>seat_id</th><th>pos</th><th>occupied</th><th>student_id</th><th>操作</th></tr>';
-    list.forEach(s=>{
-      html += `<tr><td>${s.seat_id}</td><td>${s.pos||''}</td><td>${s.occupied}</td><td>${s.student_id||''}</td>`+
-              `<td><button onclick="delSeat('${s.seat_id}')">删除</button></td></tr>`;
-    })
-    html += '</table>';
-    document.getElementById('seats').innerHTML = html;
+    seatsData = list;
+    seatsPage = 1;
+    renderSeatsPage();
     loadStats();
   }).catch(e=>{document.getElementById('seats').innerText = JSON.stringify(e)});
 }
@@ -80,14 +105,40 @@ function showAddSeat(){
   fetchJson('/admin/api/seats', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({seat_id:sid, occupied:occ, student_id:student})}).then(()=>loadSeats()).catch(e=>alert(JSON.stringify(e)));
 }
 
+let usersData = [];
+let usersPage = 1;
+const usersPageSize = 30;
+function renderUsersPage() {
+  let start = (usersPage-1)*usersPageSize;
+  let end = start + usersPageSize;
+  let keys = Object.keys(usersData);
+  let pageKeys = keys.slice(start, end);
+  let html = '<table><tr><th>student_id</th><th>seat_id</th><th>操作</th></tr>';
+  pageKeys.forEach(k=>{
+    html += `<tr><td>${k}</td><td>${usersData[k]}</td><td><button onclick="delUser('${k}')">删除</button></td></tr>`;
+  });
+  html += '</table>';
+  // 分页控件
+  let totalPages = Math.ceil(keys.length / usersPageSize);
+  if(totalPages > 1) {
+    html += '<div style="margin:8px 0">';
+    for(let i=1;i<=totalPages;i++){
+      if(i===usersPage) html += `<b>[${i}]</b> `;
+      else html += `<a href="#" onclick="gotoUsersPage(${i});return false;">${i}</a> `;
+    }
+    html += '</div>';
+  }
+  document.getElementById('users').innerHTML = html;
+}
+function gotoUsersPage(p) {
+  usersPage = p;
+  renderUsersPage();
+}
 function loadUsers(){
   fetchJson('/admin/api/users').then(obj=>{
-    let html = '<table><tr><th>student_id</th><th>seat_id</th><th>操作</th></tr>';
-    Object.keys(obj).forEach(k=>{
-      html += `<tr><td>${k}</td><td>${obj[k]}</td><td><button onclick="delUser('${k}')">删除</button></td></tr>`;
-    })
-    html += '</table>';
-    document.getElementById('users').innerHTML = html;
+    usersData = obj;
+    usersPage = 1;
+    renderUsersPage();
     loadStats();
   }).catch(e=>{document.getElementById('users').innerText = JSON.stringify(e)});
 }
