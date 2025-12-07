@@ -55,9 +55,9 @@ function loadStats(){
 
 function loadSeats(){
   fetchJson('/admin/api/seats').then(list=>{
-    let html = '<table><tr><th>seat_id</th><th>occupied</th><th>student_id</th><th>操作</th></tr>';
+    let html = '<table><tr><th>seat_id</th><th>pos</th><th>occupied</th><th>student_id</th><th>操作</th></tr>';
     list.forEach(s=>{
-      html += `<tr><td>${s.seat_id}</td><td>${s.occupied}</td><td>${s.student_id||''}</td>`+
+      html += `<tr><td>${s.seat_id}</td><td>${s.pos||''}</td><td>${s.occupied}</td><td>${s.student_id||''}</td>`+
               `<td><button onclick="delSeat('${s.seat_id}')">删除</button></td></tr>`;
     })
     html += '</table>';
