@@ -18,7 +18,7 @@ button { width: 100%; padding: 10px; margin-top: 10px; font-size: 18px; }
 <button onclick="submit()">确认领取</button>
 
 <div id="available-seats" style="margin-top:15px; padding:8px; background:#e8f4f8; border-radius:4px; text-align:center;">
-    <b>剩余座位数：</b><span id="seats-count">--</span>
+    <b>剩余座位数：</b><span id="seats-count">--</span> / <span id="seats-total">--</span>
 </div>
 
 <p id="result"></p>
@@ -26,40 +26,59 @@ button { width: 100%; padding: 10px; margin-top: 10px; font-size: 18px; }
 <script>
 let isTicketOpen = false;
 
-// 获取剩余座位数
+// 获取剩余座位数和总座位数
 function loadAvailableSeats(){
     fetch("/api/available-seats")
         .then(r => r.json())
         .then(data => {
-            let count = data.available || 0;
-            document.getElementById('seats-count').textContent = count;
+            let available = data.available || 0;
+            let total = data.total || 0;
+            document.getElementById('seats-count').textContent = available;
+            document.getElementById('seats-total').textContent = total;
         })
         .catch(() => {
             document.getElementById('seats-count').textContent = '?';
+            document.getElementById('seats-total').textContent = '?';
         });
 }
 
-// 初始化：获取取票窗口状态
+// 初始化：获取取票窗口状态和座位集合状态
 function initStatus(){
+    // 先获取顶层取票权限
     fetch("/admin/api/ticket-status")
         .then(r => r.json())
-        .then(data => {
-            isTicketOpen = Boolean(data.is_open);
-            let statusText = isTicketOpen ? '开放中' : '未开放';
-            let statusColor = isTicketOpen ? '#ffcc00' : '#90EE90';
-            document.getElementById('status-info').innerHTML =
-                `<b>取票通道：</b> <span style="background:${statusColor}; padding:2px 6px; border-radius:3px;">${statusText}</span>`;
+        .then(ticketData => {
+            isTicketOpen = Boolean(ticketData.is_open);
             
-            // 根据状态显示/隐藏姓名框
-            let snameInput = document.getElementById("sname");
-            if(isTicketOpen) {
-                // 开放时，显示姓名框
-                snameInput.hidden = false;
-            } else {
-                // 关闭时，隐藏姓名框
-                snameInput.hidden = true;
-                snameInput.value = '';
+            // 如果顶层未开放，直接显示未开放
+            if (!isTicketOpen) {
+                document.getElementById('status-info').innerHTML =
+                    `<b>取票通道：</b> <span style="background:#90EE90; padding:2px 6px; border-radius:3px;">未开放</span>`;
+                document.getElementById("sname").hidden = true;
+                document.getElementById("sname").value = '';
+                return;
             }
+            
+            // 顶层已开放，检查集合状态
+            fetch("/admin/api/seat-groups")
+                .then(r => r.json())
+                .then(groups => {
+                    // 检查是否有任一集合开放
+                    let anyGroupOpen = groups.some(g => Boolean(g.is_open));
+                    let statusText = anyGroupOpen ? '开放中' : '未开放';
+                    let statusColor = anyGroupOpen ? '#ffcc00' : '#90EE90';
+                    document.getElementById('status-info').innerHTML =
+                        `<b>取票通道：</b> <span style="background:${statusColor}; padding:2px 6px; border-radius:3px;">${statusText}</span>`;
+                    
+                    // 当顶层开放时，总是显示姓名框
+                    document.getElementById("sname").hidden = false;
+                })
+                .catch(() => {
+                    // 获取集合失败，假设有开放的集合
+                    document.getElementById('status-info').innerHTML =
+                        `<b>取票通道：</b> <span style="background:#ffcc00; padding:2px 6px; border-radius:3px;">开放中</span>`;
+                    document.getElementById("sname").hidden = false;
+                });
         })
         .catch(() => {
             document.getElementById('status-info').innerHTML = '<b>取票窗口：</b> 无法获取状态';

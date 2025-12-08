@@ -61,6 +61,27 @@ def init_db():
         cursor.execute('SELECT COUNT(*) as cnt FROM ticket_status')
         if cursor.fetchone()['cnt'] == 0:
             cursor.execute('INSERT INTO ticket_status (id, is_open) VALUES (1, 0)')
+        
+        # 新增座位集合状态表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS seat_groups (
+                id INTEGER PRIMARY KEY CHECK (id IN (1, 2)),
+                group_id INTEGER,
+                is_open BOOLEAN DEFAULT 0
+            )
+        ''')
+        # 如果 seat_groups 表为空，插入默认状态（两个集合都关闭）
+        cursor.execute('SELECT COUNT(*) as cnt FROM seat_groups')
+        if cursor.fetchone()['cnt'] == 0:
+            cursor.execute('INSERT INTO seat_groups (id, group_id, is_open) VALUES (1, 1, 0)')
+            cursor.execute('INSERT INTO seat_groups (id, group_id, is_open) VALUES (2, 2, 0)')
+        
+        # 为 seats 表添加 group_id 列（如果不存在）
+        cursor.execute("PRAGMA table_info(seats)")
+        cols = [row[1] for row in cursor.fetchall()]
+        if 'group_id' not in cols:
+            cursor.execute('ALTER TABLE seats ADD COLUMN group_id INTEGER DEFAULT 1')
+        
         conn.commit()
 
 
@@ -123,6 +144,12 @@ def ticket():
                 db_name = row['student_name'] or ''
                 if db_name.strip().lower() != student_name.strip().lower():
                     return jsonify({"status": "fail", "msg": "姓名与学号不匹配"}), 400
+                
+                # --- 检查座位集合是否有可用的开放集合 ---
+                cursor.execute('SELECT group_id FROM seat_groups WHERE is_open = 1')
+                open_groups = [row['group_id'] for row in cursor.fetchall()]
+                if not open_groups:
+                    return jsonify({"status": "fail", "msg": "未到取票时间，请耐心等待"}), 400
             else:
                 # 关闭状态：只接受管理员密钥或提示等待
                 if student_id or student_name:
@@ -160,8 +187,19 @@ def ticket():
                     "pos": existing['pos']
                 })
             
-            # --- 分配可用座位 ---
-            cursor.execute('SELECT seat_id, pos FROM seats WHERE occupied = 0 ORDER BY RANDOM() LIMIT 1')
+            # --- 分配可用座位（仅限开放集合范围内） ---
+            if is_open:
+                # 在开放的集合范围内随机分配
+                cursor.execute('SELECT group_id FROM seat_groups WHERE is_open = 1')
+                open_groups = [row['group_id'] for row in cursor.fetchall()]
+                if open_groups:
+                    placeholders = ','.join('?' * len(open_groups))
+                    cursor.execute(f'SELECT seat_id, pos FROM seats WHERE occupied = 0 AND group_id IN ({placeholders}) ORDER BY RANDOM() LIMIT 1', open_groups)
+                else:
+                    cursor.execute('SELECT seat_id, pos FROM seats WHERE occupied = 0 ORDER BY RANDOM() LIMIT 1')
+            else:
+                cursor.execute('SELECT seat_id, pos FROM seats WHERE occupied = 0 ORDER BY RANDOM() LIMIT 1')
+            
             available = cursor.fetchone()
             if not available:
                 return jsonify({"status": "fail", "msg": "票已领完"}), 400
@@ -512,6 +550,71 @@ def api_delete_validid(sid):
         return jsonify({'status': 'fail', 'msg': str(e)}), 500
 
 
+@app.route('/admin/api/seat-groups', methods=['GET'])
+@auth_required
+def api_get_seat_groups():
+    """获取两个座位集合的状态和剩余量"""
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            groups_info = []
+            for group_id in [1, 2]:
+                cursor.execute('SELECT is_open FROM seat_groups WHERE group_id = ?', (group_id,))
+                group_row = cursor.fetchone()
+                is_open = bool(group_row['is_open']) if group_row else False
+                
+                cursor.execute('SELECT COUNT(*) as total FROM seats WHERE group_id = ?', (group_id,))
+                total = cursor.fetchone()['total']
+                
+                cursor.execute('SELECT COUNT(*) as available FROM seats WHERE group_id = ? AND occupied = 0', (group_id,))
+                available = cursor.fetchone()['available']
+                
+                groups_info.append({
+                    'group_id': group_id,
+                    'is_open': int(is_open),
+                    'total': total,
+                    'available': available,
+                    'occupied': total - available
+                })
+            return jsonify(groups_info)
+    except Exception as e:
+        return jsonify({'status': 'fail', 'msg': str(e)}), 500
+
+
+@app.route('/admin/api/seat-groups/<int:group_id>', methods=['POST'])
+@auth_required
+def api_set_seat_group(group_id):
+    """开放或关闭指定座位集合"""
+    try:
+        if group_id not in [1, 2]:
+            return jsonify({'status': 'fail', 'msg': '集合 ID 必须为 1 或 2'}), 400
+        
+        data = request.get_json() or {}
+        is_open = data.get('is_open', 0)
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE seat_groups SET is_open = ? WHERE group_id = ?', (int(is_open), group_id))
+            conn.commit()
+        return jsonify({'status': 'ok', 'group_id': group_id, 'is_open': int(is_open)})
+    except Exception as e:
+        return jsonify({'status': 'fail', 'msg': str(e)}), 500
+
+
+@app.route('/admin/api/clear-ip-log', methods=['POST'])
+@auth_required
+def api_clear_ip_log():
+    """一键清除所有 IP 地址领票记录（仅管理员，用于测试）"""
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM ip_ticket_log')
+            deleted_count = cursor.rowcount
+            conn.commit()
+        return jsonify({'status': 'ok', 'msg': f'已清除 {deleted_count} 条 IP 记录'})
+    except Exception as e:
+        return jsonify({'status': 'fail', 'msg': str(e)}), 500
+
+
 @app.route('/api/available-seats', methods=['GET'])
 def api_available_seats():
     """获取剩余座位数（公开接口，不需要认证）"""
@@ -520,7 +623,9 @@ def api_available_seats():
             cursor = conn.cursor()
             cursor.execute('SELECT COUNT(*) as cnt FROM seats WHERE occupied = 0')
             available = cursor.fetchone()['cnt']
-            return jsonify({'available': available})
+            cursor.execute('SELECT COUNT(*) as cnt FROM seats')
+            total = cursor.fetchone()['cnt']
+            return jsonify({'available': available, 'total': total})
     except Exception as e:
         return jsonify({'status': 'fail', 'msg': str(e)}), 500
 

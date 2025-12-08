@@ -22,6 +22,28 @@ th,td{border:1px solid #eee;padding:6px;text-align:left}
   <button onclick="closeTicketWindow()" style="background:#ffcccc;">关闭取票</button>
 </section>
 
+<section style="background:#e6f3ff; border:2px solid #4169e1; padding:12px; margin-bottom:12px;">
+  <h3>座位集合管理（仅在取票窗口开放时生效）</h3>
+  <div id="seat-groups-info" style="margin-bottom:12px;"></div>
+  <div style="display:flex; gap:20px;">
+    <div style="flex:1;">
+      <h4>集合 1</h4>
+      <button id="btn-group1" onclick="toggleSeatGroup(1)" style="background:#90EE90; width:100%; padding:8px;">开放</button>
+      <div id="group1-stats" style="margin-top:8px; font-size:12px;"></div>
+    </div>
+    <div style="flex:1;">
+      <h4>集合 2</h4>
+      <button id="btn-group2" onclick="toggleSeatGroup(2)" style="background:#90EE90; width:100%; padding:8px;">开放</button>
+      <div id="group2-stats" style="margin-top:8px; font-size:12px;"></div>
+    </div>
+  </div>
+</section>
+
+<section style="background:#fff0f5; padding:12px; margin-bottom:12px;">
+  <h3>测试工具</h3>
+  <button onclick="clearIPLog()" style="background:#ffb6c1;">一键清除 IP 记录</button>
+</section>
+
 <div id="stats"></div>
 
 <section>
@@ -75,7 +97,53 @@ function updateTicketStatus(){
     let statusColor = isOpen ? '#ffcc00' : '#90EE90';
     document.getElementById('ticket-status-display').innerHTML = statusText;
     document.getElementById('ticket-status-display').style.background = statusColor;
+    updateSeatGroups();
   }).catch(e=>console.error(e));
+}
+
+function updateSeatGroups(){
+  fetchJson('/admin/api/seat-groups').then(groups=>{
+    let info = '<b>集合概览：</b> ';
+    groups.forEach(g => {
+      let statusColor = g.is_open ? '#ffcc00' : '#ddd';
+      let statusText = g.is_open ? '开放' : '关闭';
+      info += `集合${g.group_id}: <span style="background:${statusColor}; padding:2px 6px; border-radius:3px;">${statusText}</span> `;
+    });
+    document.getElementById('seat-groups-info').innerHTML = info;
+    
+    // 更新各集合的统计
+    groups.forEach(g => {
+      let statDiv = document.getElementById(`group${g.group_id}-stats`);
+      let btn = document.getElementById(`btn-group${g.group_id}`);
+      btn.style.background = g.is_open ? '#ffcc00' : '#90EE90';
+      btn.innerHTML = g.is_open ? '关闭' : '开放';
+      statDiv.innerHTML = `总座位: ${g.total} | 已占: ${g.occupied} | 剩余: ${g.available}`;
+    });
+  }).catch(e=>console.error(e));
+}
+
+function toggleSeatGroup(groupId){
+  fetchJson('/admin/api/seat-groups').then(groups=>{
+    let group = groups.find(g => g.group_id === groupId);
+    let newState = group.is_open ? 0 : 1;
+    let action = newState ? '开放' : '关闭';
+    
+    fetchJson(`/admin/api/seat-groups/${groupId}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({is_open: newState})
+    }).then(()=>{
+      updateSeatGroups();
+      alert(`集合 ${groupId} 已${action}`);
+    }).catch(e=>alert('失败: '+JSON.stringify(e)));
+  });
+}
+
+function clearIPLog(){
+  if(!confirm('确认一键清除所有 IP 记录吗？此操作不可恢复。')) return;
+  fetchJson('/admin/api/clear-ip-log', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})})
+    .then(data=>alert(data.msg))
+    .catch(e=>alert('失败: '+JSON.stringify(e)));
 }
 
 function loadStats(){
