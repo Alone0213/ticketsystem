@@ -141,7 +141,7 @@ def ticket():
                 ip_student_id = ip_ticket['student_id']
                 # 如果输入的学号与 IP 记录的学号不同，拒绝
                 if ip_student_id != student_id:
-                    return jsonify({"status": "fail", "msg": "同一 IP 地址只能领取一张票"}), 400
+                    return jsonify({"status": "fail", "msg": "你只能领取一张票"}), 400
                 # 如果学号相同，继续执行（允许查询自己的座位）
             
             # --- 已领取过 ---
@@ -508,6 +508,19 @@ def api_delete_validid(sid):
             cursor.execute('DELETE FROM valid_ids WHERE student_id = ?', (sid,))
             conn.commit()
             return jsonify({'status': 'ok'})
+    except Exception as e:
+        return jsonify({'status': 'fail', 'msg': str(e)}), 500
+
+
+@app.route('/api/available-seats', methods=['GET'])
+def api_available_seats():
+    """获取剩余座位数（公开接口，不需要认证）"""
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) as cnt FROM seats WHERE occupied = 0')
+            available = cursor.fetchone()['cnt']
+            return jsonify({'available': available})
     except Exception as e:
         return jsonify({'status': 'fail', 'msg': str(e)}), 500
 

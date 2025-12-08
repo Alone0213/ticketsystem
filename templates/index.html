@@ -17,10 +17,27 @@ button { width: 100%; padding: 10px; margin-top: 10px; font-size: 18px; }
 <input id="sname" placeholder="请输入姓名" style="margin-top:8px" hidden>
 <button onclick="submit()">确认领取</button>
 
+<div id="available-seats" style="margin-top:15px; padding:8px; background:#e8f4f8; border-radius:4px; text-align:center;">
+    <b>剩余座位数：</b><span id="seats-count">--</span>
+</div>
+
 <p id="result"></p>
 
 <script>
 let isTicketOpen = false;
+
+// 获取剩余座位数
+function loadAvailableSeats(){
+    fetch("/api/available-seats")
+        .then(r => r.json())
+        .then(data => {
+            let count = data.available || 0;
+            document.getElementById('seats-count').textContent = count;
+        })
+        .catch(() => {
+            document.getElementById('seats-count').textContent = '?';
+        });
+}
 
 // 初始化：获取取票窗口状态
 function initStatus(){
@@ -30,8 +47,8 @@ function initStatus(){
             isTicketOpen = Boolean(data.is_open);
             let statusText = isTicketOpen ? '开放中' : '未开放';
             let statusColor = isTicketOpen ? '#ffcc00' : '#90EE90';
-            document.getElementById('status-info').innerHTML = 
-                `<b>取票窗口：</b> <span style="background:${statusColor}; padding:2px 6px; border-radius:3px;">${statusText}</span>`;
+            document.getElementById('status-info').innerHTML =
+                `<b>取票通道：</b> <span style="background:${statusColor}; padding:2px 6px; border-radius:3px;">${statusText}</span>`;
             
             // 根据状态显示/隐藏姓名框
             let snameInput = document.getElementById("sname");
@@ -72,14 +89,21 @@ function submit(){
                 }
             }
             document.getElementById("result").innerHTML = displayMsg;
+            // 领票成功后更新剩余座位数
+            if(data.status === 'ok'){
+                loadAvailableSeats();
+            }
         })
         .catch(() => {
             document.getElementById("result").innerHTML = "出错，请重试";
         });
 }
 
-// 页面加载时初始化状态
-window.addEventListener('load', initStatus);
+// 页面加载时初始化状态和剩余座位数
+window.addEventListener('load', function(){
+    initStatus();
+    loadAvailableSeats();
+});
 </script>
 
 </body>
