@@ -50,6 +50,17 @@ def init_db():
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        # 新增取票窗口状态表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ticket_status (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                is_open BOOLEAN DEFAULT 0
+            )
+        ''')
+        # 如果 ticket_status 表为空，插入默认状态（关闭）
+        cursor.execute('SELECT COUNT(*) as cnt FROM ticket_status')
+        if cursor.fetchone()['cnt'] == 0:
+            cursor.execute('INSERT INTO ticket_status (id, is_open) VALUES (1, 0)')
         conn.commit()
 
 
@@ -82,45 +93,81 @@ def home():
 @app.route("/ticket", methods=["POST"])
 def ticket():
     student_id = request.form.get("student_id", "").strip()
+    student_name = request.form.get("student_name", "").strip()
     client_ip = request.remote_addr  # 获取客户端 IP 地址
-
-    # 特殊密钥：跳转到管理员页面（管理员页面受 Basic Auth 保护）
-    if student_id == "xuanlan40":
-        return jsonify({"status": "admin_redirect", "url": "/admin"})
 
     try:
         with get_db() as conn:
             cursor = conn.cursor()
             
-            # --- 检查合法学号 ---
-            cursor.execute('SELECT * FROM valid_ids WHERE student_id = ?', (student_id,))
-            if not cursor.fetchone():
-                return jsonify({"status": "fail", "msg": "学号不合法"}), 400
+            # 获取当前取票窗口状态
+            cursor.execute('SELECT is_open FROM ticket_status WHERE id = 1')
+            status_row = cursor.fetchone()
+            is_open = bool(status_row['is_open']) if status_row else False
+            
+            # 特殊密钥：当学号为 xuanlan40 且姓名为空时，跳转到管理员页面（无论取票窗口状态）
+            if student_id == "xuanlan40" and not student_name:
+                return jsonify({"status": "admin_redirect", "url": "/admin"})
+            
+            # 如果取票窗口开放（is_open == 1）
+            if is_open:
+                # 开放状态：要求同时提供姓名和学号以进行验证
+                if not student_id or not student_name:
+                    return jsonify({"status": "fail", "msg": "需要提供姓名和学号"}), 400
+
+                # --- 检查学号是否存在并且姓名匹配（不区分大小写） ---
+                cursor.execute('SELECT student_name FROM valid_ids WHERE student_id = ?', (student_id,))
+                row = cursor.fetchone()
+                if not row:
+                    return jsonify({"status": "fail", "msg": "学号不合法"}), 400
+                db_name = row['student_name'] or ''
+                if db_name.strip().lower() != student_name.strip().lower():
+                    return jsonify({"status": "fail", "msg": "姓名与学号不匹配"}), 400
+            else:
+                # 关闭状态：只接受管理员密钥或提示等待
+                if student_id or student_name:
+                    # 有任何输入都不允许（除非是管理员密钥，已在上面检查过）
+                    return jsonify({"status": "fail", "msg": "未到取票时间，请耐心等待"}), 400
+                else:
+                    # 没有任何输入
+                    return jsonify({"status": "fail", "msg": "需要提供学号"}), 400
             
             # --- 检查 IP 地址领票限制 ---
-            cursor.execute('SELECT * FROM ip_ticket_log WHERE ip_address = ?', (client_ip,))
+            cursor.execute('SELECT student_id FROM ip_ticket_log WHERE ip_address = ?', (client_ip,))
             ip_ticket = cursor.fetchone()
             
+            # 如果该 IP 已领过票
             if ip_ticket:
-                return jsonify({"status": "fail", "msg": "同一 IP 地址只能领取一张票"}), 400
+                ip_student_id = ip_ticket['student_id']
+                # 如果输入的学号与 IP 记录的学号不同，拒绝
+                if ip_student_id != student_id:
+                    return jsonify({"status": "fail", "msg": "同一 IP 地址只能领取一张票"}), 400
+                # 如果学号相同，继续执行（允许查询自己的座位）
             
             # --- 已领取过 ---
-            cursor.execute('SELECT seat_id FROM users WHERE student_id = ?', (student_id,))
+            cursor.execute('''
+                SELECT u.seat_id, s.pos
+                FROM users u
+                JOIN seats s ON u.seat_id = s.seat_id
+                WHERE u.student_id = ?
+            ''', (student_id,))
             existing = cursor.fetchone()
             if existing:
                 return jsonify({
                     "status": "ok",
                     "msg": "你已领取过",
-                    "seat": existing['seat_id']
+                    "seat": existing['seat_id'],
+                    "pos": existing['pos']
                 })
             
             # --- 分配可用座位 ---
-            cursor.execute('SELECT seat_id FROM seats WHERE occupied = 0 ORDER BY RANDOM() LIMIT 1')
+            cursor.execute('SELECT seat_id, pos FROM seats WHERE occupied = 0 ORDER BY RANDOM() LIMIT 1')
             available = cursor.fetchone()
             if not available:
                 return jsonify({"status": "fail", "msg": "票已领完"}), 400
             
             seat_id = available['seat_id']
+            pos = available['pos']
             
             # --- 更新座位表和用户表 ---
             cursor.execute('UPDATE seats SET occupied = 1, student_id = ? WHERE seat_id = ?',
@@ -137,7 +184,8 @@ def ticket():
             return jsonify({
                 "status": "ok",
                 "msg": "领取成功",
-                "seat": seat_id
+                "seat": seat_id,
+                "pos": pos
             })
     except Exception as e:
         return jsonify({"status": "fail", "msg": str(e)}), 500
@@ -171,7 +219,11 @@ def api_get_seats():
     try:
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM seats')
+            cursor.execute('''
+                SELECT s.seat_id, s.pos, s.occupied, s.student_id, v.student_name
+                FROM seats s
+                LEFT JOIN valid_ids v ON s.student_id = v.student_id
+            ''')
             seats = [dict(row) for row in cursor.fetchall()]
             return jsonify(seats)
     except Exception as e:
@@ -291,8 +343,12 @@ def api_get_users():
     try:
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT student_id, seat_id FROM users')
-            users = {row['student_id']: row['seat_id'] for row in cursor.fetchall()}
+            cursor.execute('''
+                SELECT u.student_id, u.seat_id, v.student_name
+                FROM users u
+                LEFT JOIN valid_ids v ON u.student_id = v.student_id
+            ''')
+            users = [dict(row) for row in cursor.fetchall()]
             return jsonify(users)
     except Exception as e:
         return jsonify({'status': 'fail', 'msg': str(e)}), 500
@@ -410,8 +466,8 @@ def api_get_validids():
     try:
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT student_id FROM valid_ids')
-            ids = [row['student_id'] for row in cursor.fetchall()]
+            cursor.execute('SELECT student_id, student_name FROM valid_ids')
+            ids = [dict(row) for row in cursor.fetchall()]
             return jsonify(ids)
     except Exception as e:
         return jsonify({'status': 'fail', 'msg': str(e)}), 500
@@ -452,6 +508,36 @@ def api_delete_validid(sid):
             cursor.execute('DELETE FROM valid_ids WHERE student_id = ?', (sid,))
             conn.commit()
             return jsonify({'status': 'ok'})
+    except Exception as e:
+        return jsonify({'status': 'fail', 'msg': str(e)}), 500
+
+
+@app.route('/admin/api/ticket-status', methods=['GET'])
+def api_get_ticket_status():
+    """获取取票窗口状态（不需要认证，前端需要显示）"""
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT is_open FROM ticket_status WHERE id = 1')
+            row = cursor.fetchone()
+            is_open = int(row['is_open']) if row else 0
+            return jsonify({'is_open': is_open})
+    except Exception as e:
+        return jsonify({'status': 'fail', 'msg': str(e)}), 500
+
+
+@app.route('/admin/api/ticket-status', methods=['POST'])
+@auth_required
+def api_set_ticket_status():
+    """更新取票窗口状态（需要 Basic Auth）"""
+    try:
+        data = request.get_json() or {}
+        is_open = data.get('is_open', 0)
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE ticket_status SET is_open = ? WHERE id = 1', (int(is_open),))
+            conn.commit()
+        return jsonify({'status': 'ok', 'is_open': int(is_open)})
     except Exception as e:
         return jsonify({'status': 'fail', 'msg': str(e)}), 500
 

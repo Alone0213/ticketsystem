@@ -12,16 +12,49 @@ button { width: 100%; padding: 10px; margin-top: 10px; font-size: 18px; }
 <body>
 
 <h2>电子领票系统</h2>
+<div id="status-info" style="margin-bottom:12px; padding:8px; background:#f0f0f0; border-radius:4px;"></div>
 <input id="sid" placeholder="请输入学号">
+<input id="sname" placeholder="请输入姓名" style="margin-top:8px" hidden>
 <button onclick="submit()">确认领取</button>
 
 <p id="result"></p>
 
 <script>
+let isTicketOpen = false;
+
+// 初始化：获取取票窗口状态
+function initStatus(){
+    fetch("/admin/api/ticket-status")
+        .then(r => r.json())
+        .then(data => {
+            isTicketOpen = Boolean(data.is_open);
+            let statusText = isTicketOpen ? '开放中' : '未开放';
+            let statusColor = isTicketOpen ? '#ffcc00' : '#90EE90';
+            document.getElementById('status-info').innerHTML = 
+                `<b>取票窗口：</b> <span style="background:${statusColor}; padding:2px 6px; border-radius:3px;">${statusText}</span>`;
+            
+            // 根据状态显示/隐藏姓名框
+            let snameInput = document.getElementById("sname");
+            if(isTicketOpen) {
+                // 开放时，显示姓名框
+                snameInput.hidden = false;
+            } else {
+                // 关闭时，隐藏姓名框
+                snameInput.hidden = true;
+                snameInput.value = '';
+            }
+        })
+        .catch(() => {
+            document.getElementById('status-info').innerHTML = '<b>取票窗口：</b> 无法获取状态';
+        });
+}
+
 function submit(){
     let sid = document.getElementById("sid").value.trim();
+    let sname = document.getElementById("sname").value.trim();
     let formData = new FormData();
     formData.append("student_id", sid);
+    formData.append("student_name", sname);
 
     fetch("/ticket", { method: "POST", body: formData })
         .then(r => r.json())
@@ -31,13 +64,22 @@ function submit(){
                 window.location.href = data.url;
                 return;
             }
-            document.getElementById("result").innerHTML =
-                (data.msg || '') + (data.seat ? " 座位号：" + data.seat : "");
+            let displayMsg = data.msg || '';
+            if (data.seat) {
+                displayMsg += " 座位号：" + data.seat;
+                if (data.pos) {
+                    displayMsg += " | 位置：" + data.pos;
+                }
+            }
+            document.getElementById("result").innerHTML = displayMsg;
         })
         .catch(() => {
             document.getElementById("result").innerHTML = "出错，请重试";
         });
 }
+
+// 页面加载时初始化状态
+window.addEventListener('load', initStatus);
 </script>
 
 </body>

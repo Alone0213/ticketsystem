@@ -12,6 +12,16 @@ th,td{border:1px solid #eee;padding:6px;text-align:left}
 </head>
 <body>
 <h2>管理员面板</h2>
+
+<section style="background:#fffacd; border:2px solid #ff6b6b; padding:12px; margin-bottom:12px;">
+  <h3>取票窗口管理</h3>
+  <div style="margin-bottom:12px;">
+    <b>当前状态：</b> <span id="ticket-status-display" style="padding:4px 8px; border-radius:4px; background:#90EE90;">未开放</span>
+  </div>
+  <button onclick="openTicketWindow()" style="background:#90EE90; margin-right:8px;">开放取票</button>
+  <button onclick="closeTicketWindow()" style="background:#ffcccc;">关闭取票</button>
+</section>
+
 <div id="stats"></div>
 
 <section>
@@ -46,6 +56,28 @@ function fetchJson(url, opts){
   })
 }
 
+function openTicketWindow(){
+  fetchJson('/admin/api/ticket-status', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({is_open: 1})})
+    .then(()=>{updateTicketStatus(); alert('取票窗口已开放');})
+    .catch(e=>alert('失败: '+JSON.stringify(e)));
+}
+
+function closeTicketWindow(){
+  fetchJson('/admin/api/ticket-status', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({is_open: 0})})
+    .then(()=>{updateTicketStatus(); alert('取票窗口已关闭');})
+    .catch(e=>alert('失败: '+JSON.stringify(e)));
+}
+
+function updateTicketStatus(){
+  fetchJson('/admin/api/ticket-status').then(data=>{
+    let isOpen = Boolean(data.is_open);
+    let statusText = isOpen ? '开放中' : '未开放';
+    let statusColor = isOpen ? '#ffcc00' : '#90EE90';
+    document.getElementById('ticket-status-display').innerHTML = statusText;
+    document.getElementById('ticket-status-display').style.background = statusColor;
+  }).catch(e=>console.error(e));
+}
+
 function loadStats(){
   fetchJson('/admin/api/stats').then(j=>{
     document.getElementById('stats').innerHTML =
@@ -54,38 +86,18 @@ function loadStats(){
 }
 
 let seatsData = [];
-let seatsPage = 1;
-const seatsPageSize = 30;
 function renderSeatsPage() {
-  let start = (seatsPage-1)*seatsPageSize;
-  let end = start + seatsPageSize;
-  let pageData = seatsData.slice(start, end);
-  let html = '<table><tr><th>seat_id</th><th>pos</th><th>occupied</th><th>student_id</th><th>操作</th></tr>';
-  pageData.forEach(s=>{
-    html += `<tr><td>${s.seat_id}</td><td>${s.pos||''}</td><td>${s.occupied}</td><td>${s.student_id||''}</td>`+
+  let html = '<table><tr><th>seat_id</th><th>pos</th><th>occupied</th><th>student_id</th><th>student_name</th><th>操作</th></tr>';
+  seatsData.forEach(s=>{
+    html += `<tr><td>${s.seat_id}</td><td>${s.pos||''}</td><td>${s.occupied}</td><td>${s.student_id||''}</td><td>${s.student_name||''}</td>`+
             `<td><button onclick="delSeat('${s.seat_id}')">删除</button></td></tr>`;
   });
   html += '</table>';
-  // 分页控件
-  let totalPages = Math.ceil(seatsData.length / seatsPageSize);
-  if(totalPages > 1) {
-    html += '<div style="margin:8px 0">';
-    for(let i=1;i<=totalPages;i++){
-      if(i===seatsPage) html += `<b>[${i}]</b> `;
-      else html += `<a href="#" onclick="gotoSeatsPage(${i});return false;">${i}</a> `;
-    }
-    html += '</div>';
-  }
   document.getElementById('seats').innerHTML = html;
-}
-function gotoSeatsPage(p) {
-  seatsPage = p;
-  renderSeatsPage();
 }
 function loadSeats(){
   fetchJson('/admin/api/seats').then(list=>{
     seatsData = list;
-    seatsPage = 1;
     renderSeatsPage();
     loadStats();
   }).catch(e=>{document.getElementById('seats').innerText = JSON.stringify(e)});
@@ -113,9 +125,10 @@ function renderUsersPage() {
   let end = start + usersPageSize;
   let keys = Object.keys(usersData);
   let pageKeys = keys.slice(start, end);
-  let html = '<table><tr><th>student_id</th><th>seat_id</th><th>操作</th></tr>';
-  pageKeys.forEach(k=>{
-    html += `<tr><td>${k}</td><td>${usersData[k]}</td><td><button onclick="delUser('${k}')">删除</button></td></tr>`;
+  let html = '<table><tr><th>student_id</th><th>student_name</th><th>seat_id</th><th>操作</th></tr>';
+  pageKeys.forEach(i=>{
+    let item = usersData[i];
+    html += `<tr><td>${item.student_id}</td><td>${item.student_name||''}</td><td>${item.seat_id}</td><td><button onclick="delUser('${item.student_id}')">删除</button></td></tr>`;
   });
   html += '</table>';
   // 分页控件
@@ -135,8 +148,9 @@ function gotoUsersPage(p) {
   renderUsersPage();
 }
 function loadUsers(){
-  fetchJson('/admin/api/users').then(obj=>{
-    usersData = obj;
+  fetchJson('/admin/api/users').then(arr=>{
+    // API 返回数组 [{student_id, seat_id, student_name}, ...]
+    usersData = arr || [];
     usersPage = 1;
     renderUsersPage();
     loadStats();
@@ -156,9 +170,9 @@ function showAddUser(){
 
 function loadValidids(){
   fetchJson('/admin/api/validids').then(list=>{
-    let html = '<ul>';
-    list.forEach(v=> html += `<li>${v} <button onclick="delValid('${v}')">删除</button></li>`);
-    html += '</ul>';
+    let html = '<table><tr><th>student_id</th><th>student_name</th><th>操作</th></tr>';
+    list.forEach(v=> html += `<tr><td>${v.student_id}</td><td>${v.student_name||''}</td><td><button onclick="delValid('${v.student_id}')">删除</button></td></tr>`);
+    html += '</table>';
     document.getElementById('validids').innerHTML = html;
   }).catch(e=>document.getElementById('validids').innerText = JSON.stringify(e));
 }
@@ -174,7 +188,7 @@ function delValid(v){
 }
 
 // 初始加载
-loadStats(); loadSeats(); loadUsers(); loadValidids();
+updateTicketStatus(); loadStats(); loadSeats(); loadUsers(); loadValidids();
 </script>
 </body>
 </html>
