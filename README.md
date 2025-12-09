@@ -385,11 +385,6 @@ ticketsystem/
 │   ├── index.html             # 用户端页面
 │   └── admin.html             # 管理端页面
 └── data_get/                   # 数据处理工具
-    ├── extract.py             # Excel 提取脚本
-    ├── stu_num.txt            # 学号列表
-    ├── 25.xlsx                # 数据文件
-    ├── 241.xlsx               # 数据文件
-    └── 242.xlsx               # 数据文件
 ```
 
 ## 常见问题
