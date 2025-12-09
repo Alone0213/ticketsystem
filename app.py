@@ -180,11 +180,16 @@ def ticket():
             ''', (student_id,))
             existing = cursor.fetchone()
             if existing:
+                # 计算该座位的票号（已占座位数中的序号）
+                cursor.execute('SELECT COUNT(*) as cnt FROM seats WHERE occupied = 1 AND seat_id <= ?', (existing['seat_id'],))
+                ticket_seq = cursor.fetchone()['cnt']
+                ticket_no = f"NO.251221{ticket_seq:03d}"
                 return jsonify({
                     "status": "ok",
                     "msg": "你已领取过",
                     "seat": existing['seat_id'],
-                    "pos": existing['pos']
+                    "pos": existing['pos'],
+                    "ticket_no": ticket_no
                 })
             
             # --- 分配可用座位（仅限开放集合范围内） ---
@@ -218,12 +223,16 @@ def ticket():
                          (client_ip, student_id))
             
             conn.commit()
-            
+            # 计算当前已占座位数，作为票号序列（001..267）
+            cursor.execute('SELECT COUNT(*) as cnt FROM seats WHERE occupied = 1')
+            occupied_cnt = cursor.fetchone()['cnt']
+            ticket_no = f"NO.251221{occupied_cnt:03d}"
             return jsonify({
                 "status": "ok",
                 "msg": "领取成功",
                 "seat": seat_id,
-                "pos": pos
+                "pos": pos,
+                "ticket_no": ticket_no
             })
     except Exception as e:
         return jsonify({"status": "fail", "msg": str(e)}), 500
@@ -293,11 +302,13 @@ def api_create_seat():
                 VALUES (?, ?, ?, ?)
             ''', (seat_id, pos, occupied, student))
             
-            # 如果已占用，添加到 users 表
+            # 如果已占用，添加到 users 表并清理该学号的旧 IP 记录
             if student:
                 cursor.execute('DELETE FROM users WHERE student_id = ?', (student,))
                 cursor.execute('INSERT INTO users (student_id, seat_id) VALUES (?, ?)', 
                              (student, seat_id))
+                # 清理该学号的 IP 日志（重新分配座位时应清理旧 IP 绑定）
+                cursor.execute('DELETE FROM ip_ticket_log WHERE student_id = ?', (student,))
             
             conn.commit()
             return jsonify({'status': 'ok', 'seat': {'seat_id': seat_id, 'pos': pos, 'occupied': occupied, 'student_id': student}})
@@ -323,10 +334,12 @@ def api_update_seat(seat_id):
             new_pos = data.get('pos') if 'pos' in data else seat['pos']
             
             old_student = seat['student_id']
+            old_occ = seat['occupied']
             
-            # 如果学生被更改，删除旧映射
+            # 如果学生被更改，删除旧映射并清理旧学号的 IP 日志
             if old_student and old_student != new_student:
                 cursor.execute('DELETE FROM users WHERE student_id = ?', (old_student,))
+                cursor.execute('DELETE FROM ip_ticket_log WHERE student_id = ?', (old_student,))
             
             # 更新座位
             cursor.execute('''
@@ -346,6 +359,12 @@ def api_update_seat(seat_id):
                 cursor.execute('DELETE FROM users WHERE student_id = ?', (new_student,))
                 cursor.execute('INSERT INTO users (student_id, seat_id) VALUES (?, ?)', 
                              (new_student, seat_id))
+                # 清理新学号的 IP 日志（重新分配座位时应清理旧 IP 绑定）
+                cursor.execute('DELETE FROM ip_ticket_log WHERE student_id = ?', (new_student,))
+            elif not new_occ:
+                # 座位从占用变为未占用，清理相关 IP 日志
+                if old_student:
+                    cursor.execute('DELETE FROM ip_ticket_log WHERE student_id = ?', (old_student,))
             
             conn.commit()
             return jsonify({'status': 'ok'})
@@ -364,9 +383,12 @@ def api_delete_seat(seat_id):
             if not seat:
                 return jsonify({'status': 'fail', 'msg': '座位不存在'}), 404
             
+            student = seat['student_id']
             # 删除关联的用户
-            if seat['student_id']:
-                cursor.execute('DELETE FROM users WHERE student_id = ?', (seat['student_id'],))
+            if student:
+                cursor.execute('DELETE FROM users WHERE student_id = ?', (student,))
+                # 清理该学号的 IP 日志
+                cursor.execute('DELETE FROM ip_ticket_log WHERE student_id = ?', (student,))
             
             cursor.execute('DELETE FROM seats WHERE seat_id = ?', (seat_id,))
             conn.commit()
@@ -492,6 +514,8 @@ def api_delete_user(student_id):
             cursor.execute('UPDATE seats SET occupied = 0, student_id = NULL WHERE seat_id = ?', 
                          (seat_id,))
             cursor.execute('DELETE FROM users WHERE student_id = ?', (student_id,))
+            # 清理 IP 日志（该学号的 IP 绑定记录）
+            cursor.execute('DELETE FROM ip_ticket_log WHERE student_id = ?', (student_id,))
             conn.commit()
             return jsonify({'status': 'ok'})
     except Exception as e:

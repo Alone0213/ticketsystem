@@ -107,6 +107,9 @@ function submit(){
                     displayMsg += " | 位置：" + data.pos;
                 }
             }
+            if (data.ticket_no) {
+                displayMsg += " | 票号：" + data.ticket_no;
+            }
             document.getElementById("result").innerHTML = displayMsg;
             // 领票成功后更新剩余座位数
             if(data.status === 'ok'){
