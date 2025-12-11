@@ -1,27 +1,289 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>领票系统</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>迎新晚会领票系统</title>
 <style>
-body { font-family: sans-serif; max-width: 400px; margin: 40px auto; }
-input { width: 100%; padding: 10px; font-size: 18px; }
-button { width: 100%; padding: 10px; margin-top: 10px; font-size: 18px; }
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-image: url('/static/pics/poster.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    position: relative;
+}
+
+body::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.6);
+    filter: brightness(1.1);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    padding: 20px;
+    width: 100%;
+    max-width: 500px;
+    position: relative;
+    z-index: 1;
+}
+
+h2 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 24px;
+}
+
+#status-info {
+    margin-bottom: 15px;
+    padding: 12px;
+    background: #f0f0f0;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 14px;
+    border-left: 4px solid #667eea;
+}
+
+#status-info b {
+    color: #333;
+    margin-right: 8px;
+}
+
+#status-info span {
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.form-group {
+    margin-bottom: 12px;
+}
+
+input {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-family: inherit;
+    transition: all 0.3s ease;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+input::placeholder {
+    color: #999;
+}
+
+button {
+    width: 100%;
+    padding: 16px;
+    margin-top: 15px;
+    font-size: 18px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    touch-action: manipulation;
+    -webkit-appearance: none;
+}
+
+button:active {
+    transform: scale(0.98);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+}
+
+button:hover {
+    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+}
+
+#available-seats {
+    margin-top: 18px;
+    padding: 12px;
+    background: #e8f4f8;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 14px;
+    border-left: 4px solid #667eea;
+}
+
+#available-seats b {
+    color: #333;
+    margin-right: 8px;
+}
+
+#seats-count, #seats-total {
+    color: #667eea;
+    font-weight: 700;
+    font-size: 18px;
+}
+
+#result {
+    margin-top: 18px;
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 14px;
+    color: #333;
+    background: #f9f9f9;
+    min-height: 20px;
+    border-left: 4px solid #667eea;
+}
+
+#result.success {
+    background: #d4edda;
+    color: #155724;
+    border-left-color: #28a745;
+}
+
+#result.error {
+    background: #f8d7da;
+    color: #721c24;
+    border-left-color: #dc3545;
+}
+
+/* 平板设备优化 */
+@media (min-width: 600px) {
+    .container {
+        padding: 40px;
+    }
+
+    h2 {
+        font-size: 28px;
+        margin-bottom: 30px;
+    }
+
+    input {
+        padding: 12px;
+        font-size: 16px;
+    }
+
+    button {
+        padding: 14px;
+        font-size: 16px;
+    }
+}
+
+/* 大屏幕设备优化 */
+@media (min-width: 768px) {
+    body {
+        padding: 20px;
+    }
+
+    .container {
+        padding: 50px;
+        max-width: 600px;
+    }
+
+    h2 {
+        font-size: 32px;
+    }
+}
+
+/* 手机横屏优化 */
+@media (max-height: 600px) and (orientation: landscape) {
+    .container {
+        padding: 15px;
+        max-width: 90vw;
+    }
+
+    h2 {
+        font-size: 20px;
+        margin-bottom: 10px;
+    }
+
+    input {
+        padding: 10px;
+        font-size: 14px;
+    }
+
+    button {
+        padding: 12px;
+        font-size: 16px;
+        margin-top: 10px;
+    }
+
+    #status-info, #available-seats {
+        padding: 8px;
+        font-size: 12px;
+        margin-bottom: 10px;
+    }
+
+    #result {
+        font-size: 12px;
+        padding: 8px;
+        margin-top: 10px;
+    }
+}
+
+/* 确保输入框在iOS上正确显示 */
+@supports (-webkit-touch-callout: none) {
+    input, button {
+        font-size: 16px;
+    }
+}
 </style>
 </head>
 <body>
 
-<h2>电子领票系统</h2>
-<div id="status-info" style="margin-bottom:12px; padding:8px; background:#f0f0f0; border-radius:4px;"></div>
-<input id="sid" placeholder="请输入学号">
-<input id="sname" placeholder="请输入姓名" style="margin-top:8px" hidden>
-<button onclick="submit()">确认领取</button>
+<div class="container">
+    <h2>迎新晚会领票系统</h2>
+    <div id="status-info"></div>
+    <div class="form-group">
+        <input id="sid" placeholder="请输入学号">
+    </div>
+    <div class="form-group">
+        <input id="sname" placeholder="请输入姓名" hidden>
+    </div>
+    <button onclick="submit()">确认领取</button>
 
-<div id="available-seats" style="margin-top:15px; padding:8px; background:#e8f4f8; border-radius:4px; text-align:center;">
-    <b>剩余座位数：</b><span id="seats-count">--</span> / <span id="seats-total">--</span>
+    <div id="available-seats">
+        <b>剩余座位数：</b><span id="seats-count">--</span> / <span id="seats-total">--</span>
+    </div>
+
+    <div id="result"></div>
+    <div id="constant" style="text-align: center;">
+        <small>技术支持：陕西师范大学人工智能与计算机学院 计算机科学协会</small>
+        
+    </div>
 </div>
-
-<p id="result"></p>
 
 <script>
 let isTicketOpen = false;
@@ -100,6 +362,23 @@ function submit(){
                 window.location.href = data.url;
                 return;
             }
+            
+            // 领票成功 - 跳转到电子票页面
+            if(data.status === 'ok'){
+                const params = new URLSearchParams({
+                    sid: sid,
+                    sname: sname,
+                    seat: data.seat,
+                    row: data.row_num || '',
+                    col: data.col_num || '',
+                    ticket: data.ticket_no,
+                    pos: data.pos || ''
+                });
+                window.location.href = '/ticket?' + params.toString();
+                return;
+            }
+            
+            // 领票失败或其他状态
             let displayMsg = data.msg || '';
             if (data.seat) {
                 displayMsg += " 座位号：" + data.seat;
@@ -111,10 +390,7 @@ function submit(){
                 displayMsg += " | 票号：" + data.ticket_no;
             }
             document.getElementById("result").innerHTML = displayMsg;
-            // 领票成功后更新剩余座位数
-            if(data.status === 'ok'){
-                loadAvailableSeats();
-            }
+            loadAvailableSeats();
         })
         .catch(() => {
             document.getElementById("result").innerHTML = "出错，请重试";

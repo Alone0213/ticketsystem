@@ -1,8 +1,8 @@
-from flask import Flask, request, jsonify, render_template, Response
+from flask import Flask, request, jsonify, render_template, Response, send_from_directory
 import sqlite3, random, os
 from contextlib import contextmanager
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='pics', static_url_path='/static/pics')
 app.config['DATABASE'] = 'ticket.db'
 
 
@@ -82,6 +82,18 @@ def init_db():
         if 'group_id' not in cols:
             cursor.execute('ALTER TABLE seats ADD COLUMN group_id INTEGER DEFAULT 1')
         
+        # 为 seats 表添加 row_num 列（如果不存在）
+        cursor.execute("PRAGMA table_info(seats)")
+        cols = [row[1] for row in cursor.fetchall()]
+        if 'row_num' not in cols:
+            cursor.execute('ALTER TABLE seats ADD COLUMN row_num INTEGER DEFAULT 0')
+        
+        # 为 seats 表添加 col_num 列（如果不存在）
+        cursor.execute("PRAGMA table_info(seats)")
+        cols = [row[1] for row in cursor.fetchall()]
+        if 'col_num' not in cols:
+            cursor.execute('ALTER TABLE seats ADD COLUMN col_num INTEGER DEFAULT 0')
+        
         conn.commit()
 
 
@@ -109,6 +121,11 @@ def auth_required(f):
 @app.route("/")
 def home():
     return render_template("index.html")
+
+# ------------ 票据页面 ------------
+@app.route("/ticket")
+def ticket_page():
+    return render_template("ticket.html")
 
 # ------------ 领取票 ------------
 @app.route("/ticket", methods=["POST"])
@@ -173,7 +190,7 @@ def ticket():
             
             # --- 已领取过 ---
             cursor.execute('''
-                SELECT u.seat_id, s.pos
+                SELECT u.seat_id, s.pos, s.row_num, s.col_num
                 FROM users u
                 JOIN seats s ON u.seat_id = s.seat_id
                 WHERE u.student_id = ?
@@ -189,6 +206,8 @@ def ticket():
                     "msg": "你已领取过",
                     "seat": existing['seat_id'],
                     "pos": existing['pos'],
+                    "row_num": existing['row_num'],
+                    "col_num": existing['col_num'],
                     "ticket_no": ticket_no
                 })
             
@@ -199,11 +218,11 @@ def ticket():
                 open_groups = [row['group_id'] for row in cursor.fetchall()]
                 if open_groups:
                     placeholders = ','.join('?' * len(open_groups))
-                    cursor.execute(f'SELECT seat_id, pos FROM seats WHERE occupied = 0 AND group_id IN ({placeholders}) ORDER BY RANDOM() LIMIT 1', open_groups)
+                    cursor.execute(f'SELECT seat_id, pos, row_num, col_num FROM seats WHERE occupied = 0 AND group_id IN ({placeholders}) ORDER BY RANDOM() LIMIT 1', open_groups)
                 else:
-                    cursor.execute('SELECT seat_id, pos FROM seats WHERE occupied = 0 ORDER BY RANDOM() LIMIT 1')
+                    cursor.execute('SELECT seat_id, pos, row_num, col_num FROM seats WHERE occupied = 0 ORDER BY RANDOM() LIMIT 1')
             else:
-                cursor.execute('SELECT seat_id, pos FROM seats WHERE occupied = 0 ORDER BY RANDOM() LIMIT 1')
+                cursor.execute('SELECT seat_id, pos, row_num, col_num FROM seats WHERE occupied = 0 ORDER BY RANDOM() LIMIT 1')
             
             available = cursor.fetchone()
             if not available:
@@ -211,6 +230,8 @@ def ticket():
             
             seat_id = available['seat_id']
             pos = available['pos']
+            row_num = available['row_num']
+            col_num = available['col_num']
             
             # --- 获取学生姓名 ---
             cursor.execute('SELECT student_name FROM valid_ids WHERE student_id = ?', (student_id,))
@@ -237,6 +258,8 @@ def ticket():
                 "msg": "领取成功",
                 "seat": seat_id,
                 "pos": pos,
+                "row_num": row_num,
+                "col_num": col_num,
                 "ticket_no": ticket_no
             })
     except Exception as e:
@@ -594,9 +617,8 @@ def api_delete_validid(sid):
 
 
 @app.route('/admin/api/seat-groups', methods=['GET'])
-@auth_required
 def api_get_seat_groups():
-    """获取两个座位集合的状态和剩余量"""
+    """获取两个座位集合的状态和剩余量（公开接口，学生端需要）"""
     try:
         with get_db() as conn:
             cursor = conn.cursor()
