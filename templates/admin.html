@@ -193,10 +193,10 @@ function renderUsersPage() {
   let end = start + usersPageSize;
   let keys = Object.keys(usersData);
   let pageKeys = keys.slice(start, end);
-  let html = '<table><tr><th>student_id</th><th>student_name</th><th>seat_id</th><th>操作</th></tr>';
+  let html = '<table><tr><th>student_id</th><th>student_name</th><th>seat_id</th><th>pos</th><th>操作</th></tr>';
   pageKeys.forEach(i=>{
     let item = usersData[i];
-    html += `<tr><td>${item.student_id}</td><td>${item.student_name||''}</td><td>${item.seat_id}</td><td><button onclick="delUser('${item.student_id}')">删除</button></td></tr>`;
+    html += `<tr><td>${item.student_id}</td><td>${item.student_name||''}</td><td>${item.seat_id}</td><td>${item.pos||''}</td><td><button onclick="delUser('${item.student_id}')">删除</button></td></tr>`;
   });
   html += '</table>';
   // 分页控件

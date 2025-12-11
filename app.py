@@ -212,11 +212,16 @@ def ticket():
             seat_id = available['seat_id']
             pos = available['pos']
             
+            # --- 获取学生姓名 ---
+            cursor.execute('SELECT student_name FROM valid_ids WHERE student_id = ?', (student_id,))
+            name_row = cursor.fetchone()
+            student_name_db = name_row['student_name'] if name_row else ''
+            
             # --- 更新座位表和用户表 ---
             cursor.execute('UPDATE seats SET occupied = 1, student_id = ? WHERE seat_id = ?',
                          (student_id, seat_id))
-            cursor.execute('INSERT INTO users (student_id, seat_id) VALUES (?, ?)',
-                         (student_id, seat_id))
+            cursor.execute('INSERT INTO users (student_id, seat_id, student_name, pos) VALUES (?, ?, ?, ?)',
+                         (student_id, seat_id, student_name_db, pos))
             
             # --- 记录 IP 地址领票日志 ---
             cursor.execute('INSERT INTO ip_ticket_log (ip_address, student_id) VALUES (?, ?)',
@@ -305,8 +310,12 @@ def api_create_seat():
             # 如果已占用，添加到 users 表并清理该学号的旧 IP 记录
             if student:
                 cursor.execute('DELETE FROM users WHERE student_id = ?', (student,))
-                cursor.execute('INSERT INTO users (student_id, seat_id) VALUES (?, ?)', 
-                             (student, seat_id))
+                # 获取学生姓名和座位位置
+                cursor.execute('SELECT student_name FROM valid_ids WHERE student_id = ?', (student,))
+                name_row = cursor.fetchone()
+                student_name_db = name_row['student_name'] if name_row else ''
+                cursor.execute('INSERT INTO users (student_id, seat_id, student_name, pos) VALUES (?, ?, ?, ?)', 
+                             (student, seat_id, student_name_db, pos))
                 # 清理该学号的 IP 日志（重新分配座位时应清理旧 IP 绑定）
                 cursor.execute('DELETE FROM ip_ticket_log WHERE student_id = ?', (student,))
             
@@ -357,8 +366,12 @@ def api_update_seat(seat_id):
                                  (old_seat['seat_id'],))
                 
                 cursor.execute('DELETE FROM users WHERE student_id = ?', (new_student,))
-                cursor.execute('INSERT INTO users (student_id, seat_id) VALUES (?, ?)', 
-                             (new_student, seat_id))
+                # 获取学生姓名和座位位置
+                cursor.execute('SELECT student_name FROM valid_ids WHERE student_id = ?', (new_student,))
+                name_row = cursor.fetchone()
+                student_name_db = name_row['student_name'] if name_row else ''
+                cursor.execute('INSERT INTO users (student_id, seat_id, student_name, pos) VALUES (?, ?, ?, ?)', 
+                             (new_student, seat_id, student_name_db, new_pos))
                 # 清理新学号的 IP 日志（重新分配座位时应清理旧 IP 绑定）
                 cursor.execute('DELETE FROM ip_ticket_log WHERE student_id = ?', (new_student,))
             elif not new_occ:
@@ -404,9 +417,8 @@ def api_get_users():
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT u.student_id, u.seat_id, v.student_name
+                SELECT u.student_id, u.seat_id, u.student_name, u.pos
                 FROM users u
-                LEFT JOIN valid_ids v ON u.student_id = v.student_id
             ''')
             users = [dict(row) for row in cursor.fetchall()]
             return jsonify(users)
@@ -448,8 +460,15 @@ def api_create_user():
             cursor.execute('UPDATE seats SET occupied = 1, student_id = ? WHERE seat_id = ?', 
                          (student, seat_id))
             cursor.execute('DELETE FROM users WHERE student_id = ?', (student,))
-            cursor.execute('INSERT INTO users (student_id, seat_id) VALUES (?, ?)', 
-                         (student, seat_id))
+            # 获取学生姓名和座位位置
+            cursor.execute('SELECT student_name FROM valid_ids WHERE student_id = ?', (student,))
+            name_row = cursor.fetchone()
+            student_name_db = name_row['student_name'] if name_row else ''
+            cursor.execute('SELECT pos FROM seats WHERE seat_id = ?', (seat_id,))
+            pos_row = cursor.fetchone()
+            pos = pos_row['pos'] if pos_row else ''
+            cursor.execute('INSERT INTO users (student_id, seat_id, student_name, pos) VALUES (?, ?, ?, ?)', 
+                         (student, seat_id, student_name_db, pos))
             conn.commit()
             return jsonify({'status': 'ok'})
     except Exception as e:
