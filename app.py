@@ -97,6 +97,19 @@ def init_db():
         conn.commit()
 
 
+# ---------- 响应头优化：添加浏览器缓存 ----------
+@app.after_request
+def add_cache_headers(response):
+    """为不同类型资源添加缓存头"""
+    path = request.path
+    
+    # 为 /static/pics 下的图片设置缓存（30天）
+    if path.startswith('/static/pics/'):
+        response.headers['Cache-Control'] = 'public, max-age=2592000'
+        response.headers['Pragma'] = 'public'
+    
+    return response
+
 # ---------- 简单 HTTP Basic Auth 装饰器 ----------
 def check_auth():
     auth = request.authorization
@@ -190,24 +203,27 @@ def ticket():
             
             # --- 已领取过 ---
             cursor.execute('''
-                SELECT u.seat_id, s.pos, s.row_num, s.col_num
-                FROM users u
-                JOIN seats s ON u.seat_id = s.seat_id
-                WHERE u.student_id = ?
+                SELECT seat_id FROM users WHERE student_id = ?
             ''', (student_id,))
-            existing = cursor.fetchone()
-            if existing:
+            existing_user = cursor.fetchone()
+            if existing_user:
+                seat_id = existing_user['seat_id']
+                # 直接从seats表查询所有必要信息
+                cursor.execute('''
+                    SELECT pos, row_num, col_num FROM seats WHERE seat_id = ?
+                ''', (seat_id,))
+                seat = cursor.fetchone()
                 # 计算该座位的票号（已占座位数中的序号）
-                cursor.execute('SELECT COUNT(*) as cnt FROM seats WHERE occupied = 1 AND seat_id <= ?', (existing['seat_id'],))
+                cursor.execute('SELECT COUNT(*) as cnt FROM seats WHERE occupied = 1 AND seat_id <= ?', (seat_id,))
                 ticket_seq = cursor.fetchone()['cnt']
                 ticket_no = f"NO.251221{ticket_seq:03d}"
                 return jsonify({
                     "status": "ok",
                     "msg": "你已领取过",
-                    "seat": existing['seat_id'],
-                    "pos": existing['pos'],
-                    "row_num": existing['row_num'],
-                    "col_num": existing['col_num'],
+                    "seat": seat_id,
+                    "pos": seat['pos'],
+                    "row_num": seat['row_num'],
+                    "col_num": seat['col_num'],
                     "ticket_no": ticket_no
                 })
             
