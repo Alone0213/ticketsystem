@@ -284,6 +284,64 @@ button:hover {
     }
 }
 
+/* 手机竖屏优化 */
+@media (max-width: 540px) {
+    body {
+        padding-top: 55px;
+        padding-bottom: 55px;
+    }
+
+    body::before {
+        top: 55px;
+    }
+
+    .navbar {
+        padding: 10px 15px;
+    }
+
+    .navbar h1 {
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0;
+    }
+
+    .footer {
+        padding: 10px 15px;
+        font-size: 12px;
+    }
+
+    .footer p {
+        margin: 0;
+    }
+
+    .container {
+        max-width: 95%;
+        padding: 15px;
+    }
+
+    h2 {
+        font-size: 18px;
+        margin-bottom: 15px;
+    }
+
+    input {
+        padding: 12px;
+        font-size: 14px;
+    }
+
+    button {
+        padding: 14px;
+        font-size: 16px;
+    }
+
+    .info-section {
+        padding: 12px;
+        margin-top: 15px;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+}
+
 /* 手机横屏优化 */
 @media (max-height: 600px) and (orientation: landscape) {
     .container {
@@ -332,7 +390,7 @@ button:hover {
 
 <!-- 导航栏 -->
 <div class="navbar">
-    <h1>“智启新元，AI创未来”迎新晚会领票系统</h1>
+    <h1>“智启新元，AI创未来”迎新晚会</h1>
 </div>
 
 <!-- 主容器：调整flex布局使其居中 -->
