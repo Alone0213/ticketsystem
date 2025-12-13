@@ -34,6 +34,20 @@ th,td{border:1px solid #eee;padding:6px;text-align:left}
   </div>
 </section>
 
+<section style="background:#ffe6f0; border:2px solid #d91e63; padding:12px; margin-bottom:12px;">
+  <h3>说明信息管理</h3>
+  <div style="margin-bottom:12px;">
+    <label><b>当前说明内容：</b></label>
+    <div id="info-section-display" style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px; min-height:60px; max-height:150px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; font-size:12px; line-height:1.5;"></div>
+  </div>
+  <div style="margin-bottom:12px;">
+    <label><b>编辑说明信息：</b></label>
+    <textarea id="info-section-input" placeholder="请输入说明信息（支持换行）" style="width:100%; height:150px; padding:10px; border:1px solid #ddd; border-radius:4px; font-family:monospace;"></textarea>
+  </div>
+  <button onclick="saveInfoSection()" style="background:#4CAF50; color:white; padding:8px 16px; border:none; border-radius:4px; cursor:pointer; margin-right:8px;">保存说明</button>
+  <button onclick="loadInfoSectionForAdmin()" style="background:#2196F3; color:white; padding:8px 16px; border:none; border-radius:4px; cursor:pointer;">重新加载</button>
+</section>
+
 <section style="background:#e6f3ff; border:2px solid #4169e1; padding:12px; margin-bottom:12px;">
   <h3>座位集合管理（仅在取票窗口开放时生效）</h3>
   <div id="seat-groups-info" style="margin-bottom:12px;"></div>
@@ -289,8 +303,32 @@ function updateLocalKeyStatus(){
   }).catch(e=>console.error(e));
 }
 
+function loadInfoSectionForAdmin(){
+  fetchJson('/admin/api/info-section').then(data=>{
+    let content = data.content || '';
+    document.getElementById('info-section-display').innerHTML = content.replace(/\n/g, '<br>');
+    document.getElementById('info-section-input').value = content;
+  }).catch(e=>{
+    alert('加载失败: '+JSON.stringify(e));
+  });
+}
+
+function saveInfoSection(){
+  let content = document.getElementById('info-section-input').value;
+  fetchJson('/admin/api/info-section', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({content: content})
+  }).then(data=>{
+    alert('说明信息已保存');
+    loadInfoSectionForAdmin();
+  }).catch(e=>{
+    alert('保存失败: '+JSON.stringify(e));
+  });
+}
+
 // 初始加载
-updateTicketStatus(); updateLocalKeyStatus(); loadStats(); loadSeats(); loadUsers(); loadValidids();
+updateTicketStatus(); updateLocalKeyStatus(); loadStats(); loadSeats(); loadUsers(); loadValidids(); loadInfoSectionForAdmin();
 </script>
 </body>
 </html>

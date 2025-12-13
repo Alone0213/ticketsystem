@@ -416,13 +416,7 @@ button:hover {
     <div id="result"></div>
 
     <!-- 说明信息模块 -->
-    <div class="info-section">
-        欢迎参加"智启新元，AI创未来"迎新晚会！请按照以下说明进行领票：<br>
-        1.领票通道开放时间：XX日XX时。线上共开放135个座位，领完即止。<br>
-        2.每个设备限领一张票，同学们凭票入场。<br>
-        3.没有抢到票的同学不用气馁，剩下的票可通过服务点扫码线下领票，依旧先到先得。<br>
-        线下领票时间地点：
-    </div>
+    <div class="info-section" id="info-section-display"></div>
 </div>
 </div>
 
@@ -448,6 +442,24 @@ function loadAvailableSeats(){
         .catch(() => {
             document.getElementById('seats-count').textContent = '?';
             document.getElementById('seats-total').textContent = '?';
+        });
+}
+
+// 加载说明信息
+function loadInfoSection(){
+    fetch("/api/info-section")
+        .then(r => r.json())
+        .then(data => {
+            let content = data.content || '';
+            let infoDiv = document.getElementById('info-section-display');
+            if (content.trim()) {
+                infoDiv.innerHTML = content.replace(/\n/g, '<br>');
+            } else {
+                infoDiv.innerHTML = '';
+            }
+        })
+        .catch(() => {
+            document.getElementById('info-section-display').innerHTML = '';
         });
 }
 
@@ -569,6 +581,7 @@ function submit(){
 window.addEventListener('load', function(){
     initStatus();
     loadAvailableSeats();
+    loadInfoSection();
 });
 </script>
 

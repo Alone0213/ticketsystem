@@ -106,6 +106,23 @@ def init_db():
         if cursor.fetchone()['cnt'] == 0:
             cursor.execute('INSERT INTO local_key_switch (id, is_open) VALUES (1, 0)')
         
+        # 新增说明信息表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS info_section (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                content TEXT DEFAULT ''
+            )
+        ''')
+        # 如果 info_section 表为空，插入默认内容
+        cursor.execute('SELECT COUNT(*) as cnt FROM info_section')
+        if cursor.fetchone()['cnt'] == 0:
+            default_content = '''欢迎参加"智启新元，AI创未来"迎新晚会！请按照以下说明进行领票：
+1.领票通道开放时间：XX日XX时。线上共开放135个座位，领完即止。
+2.每个设备限领一张票，同学们凭票入场。
+3.没有抢到票的同学不用气馁，剩下的票可通过服务点扫码线下领票，依旧先到先得。
+线下领票时间地点：'''
+            cursor.execute('INSERT INTO info_section (id, content) VALUES (1, ?)', (default_content,))
+        
         conn.commit()
 
 
@@ -820,6 +837,51 @@ def api_stats():
                 'free': total - allocated,
                 'user_count': user_count
             })
+    except Exception as e:
+        return jsonify({'status': 'fail', 'msg': str(e)}), 500
+
+
+@app.route('/api/info-section', methods=['GET'])
+def api_get_info_section():
+    """获取说明信息（公开接口，不需要认证）"""
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT content FROM info_section WHERE id = 1')
+            row = cursor.fetchone()
+            content = row['content'] if row else ''
+            return jsonify({'content': content})
+    except Exception as e:
+        return jsonify({'status': 'fail', 'msg': str(e)}), 500
+
+
+@app.route('/admin/api/info-section', methods=['GET'])
+@auth_required
+def api_get_info_section_admin():
+    """获取说明信息（管理员接口，需要认证）"""
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT content FROM info_section WHERE id = 1')
+            row = cursor.fetchone()
+            content = row['content'] if row else ''
+            return jsonify({'content': content})
+    except Exception as e:
+        return jsonify({'status': 'fail', 'msg': str(e)}), 500
+
+
+@app.route('/admin/api/info-section', methods=['POST'])
+@auth_required
+def api_set_info_section():
+    """更新说明信息（需要 Basic Auth）"""
+    try:
+        data = request.get_json() or {}
+        content = data.get('content', '')
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE info_section SET content = ? WHERE id = 1', (content,))
+            conn.commit()
+        return jsonify({'status': 'ok', 'content': content})
     except Exception as e:
         return jsonify({'status': 'fail', 'msg': str(e)}), 500
 
