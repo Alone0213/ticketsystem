@@ -94,6 +94,18 @@ def init_db():
         if 'col_num' not in cols:
             cursor.execute('ALTER TABLE seats ADD COLUMN col_num INTEGER DEFAULT 0')
         
+        # 新增本地密钥开关表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS local_key_switch (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                is_open BOOLEAN DEFAULT 0
+            )
+        ''')
+        # 如果 local_key_switch 表为空，插入默认状态（关闭）
+        cursor.execute('SELECT COUNT(*) as cnt FROM local_key_switch')
+        if cursor.fetchone()['cnt'] == 0:
+            cursor.execute('INSERT INTO local_key_switch (id, is_open) VALUES (1, 0)')
+        
         conn.commit()
 
 
@@ -145,6 +157,7 @@ def ticket_page():
 def ticket():
     student_id = request.form.get("student_id", "").strip()
     student_name = request.form.get("student_name", "").strip()
+    local_key = request.form.get("local_key", "").strip()
     client_ip = request.remote_addr  # 获取客户端 IP 地址
 
     try:
@@ -156,6 +169,11 @@ def ticket():
             status_row = cursor.fetchone()
             is_open = bool(status_row['is_open']) if status_row else False
             
+            # 获取本地密钥开关状态
+            cursor.execute('SELECT is_open FROM local_key_switch WHERE id = 1')
+            key_switch_row = cursor.fetchone()
+            key_switch_open = bool(key_switch_row['is_open']) if key_switch_row else False
+            
             # 特殊密钥：当学号为 xuanlan40 且姓名为空时，跳转到管理员页面（无论取票窗口状态）
             if student_id == "xuanlan40" and not student_name:
                 return jsonify({"status": "admin_redirect", "url": "/admin"})
@@ -166,6 +184,16 @@ def ticket():
                 if not student_id or not student_name:
                     return jsonify({"status": "fail", "msg": "需要提供姓名和学号"}), 400
 
+                # --- 检查本地密钥开关（如果打开，需要验证密钥） ---
+                if key_switch_open:
+                    local_pass = os.environ.get("LOCAL_PASS", "123456")
+                    if not local_key:
+                        # 没有输入密钥
+                        return jsonify({"status": "fail", "msg": "请前往线下扫码获取密钥"}), 400
+                    elif local_key != local_pass:
+                        # 密钥输入错误
+                        return jsonify({"status": "fail", "msg": "请输入正确的密钥"}), 400
+                
                 # --- 检查学号是否存在并且姓名匹配（不区分大小写） ---
                 cursor.execute('SELECT student_name FROM valid_ids WHERE student_id = ?', (student_id,))
                 row = cursor.fetchone()
@@ -735,6 +763,36 @@ def api_set_ticket_status():
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute('UPDATE ticket_status SET is_open = ? WHERE id = 1', (int(is_open),))
+            conn.commit()
+        return jsonify({'status': 'ok', 'is_open': int(is_open)})
+    except Exception as e:
+        return jsonify({'status': 'fail', 'msg': str(e)}), 500
+
+
+@app.route('/admin/api/local-key-switch', methods=['GET'])
+def api_get_local_key_switch():
+    """获取本地密钥开关状态（不需要认证，前端需要显示）"""
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT is_open FROM local_key_switch WHERE id = 1')
+            row = cursor.fetchone()
+            is_open = int(row['is_open']) if row else 0
+            return jsonify({'is_open': is_open})
+    except Exception as e:
+        return jsonify({'status': 'fail', 'msg': str(e)}), 500
+
+
+@app.route('/admin/api/local-key-switch', methods=['POST'])
+@auth_required
+def api_set_local_key_switch():
+    """更新本地密钥开关状态（需要 Basic Auth）"""
+    try:
+        data = request.get_json() or {}
+        is_open = data.get('is_open', 0)
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE local_key_switch SET is_open = ? WHERE id = 1', (int(is_open),))
             conn.commit()
         return jsonify({'status': 'ok', 'is_open': int(is_open)})
     except Exception as e:

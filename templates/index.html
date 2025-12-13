@@ -404,6 +404,9 @@ button:hover {
     <div class="form-group">
         <input id="sname" placeholder="请输入姓名" hidden>
     </div>
+    <div class="form-group" id="local-key-group" style="display: none;">
+        <input id="lkey" placeholder="请输入密钥" type="password">
+    </div>
     <button onclick="submit()">确认领取</button>
 
     <div id="available-seats">
@@ -430,6 +433,7 @@ button:hover {
 
 <script>
 let isTicketOpen = false;
+let isLocalKeySwitchOpen = false;
 
 // 获取剩余座位数和总座位数
 function loadAvailableSeats(){
@@ -461,10 +465,29 @@ function initStatus(){
                     `<b>取票通道：</b> <span style="background:#90EE90; padding:2px 6px; border-radius:3px;">未开放</span>`;
                 document.getElementById("sname").hidden = true;
                 document.getElementById("sname").value = '';
+                document.getElementById("local-key-group").style.display = 'none';
                 return;
             }
             
-            // 顶层已开放，检查集合状态
+            // 顶层已开放，获取本地密钥开关状态
+            fetch("/admin/api/local-key-switch")
+                .then(r => r.json())
+                .then(keyData => {
+                    isLocalKeySwitchOpen = Boolean(keyData.is_open);
+                    // 根据密钥开关状态显示或隐藏密钥输入框
+                    if (isLocalKeySwitchOpen) {
+                        document.getElementById("local-key-group").style.display = 'block';
+                    } else {
+                        document.getElementById("local-key-group").style.display = 'none';
+                        document.getElementById("lkey").value = '';
+                    }
+                })
+                .catch(() => {
+                    // 获取失败，默认隐藏密钥框
+                    document.getElementById("local-key-group").style.display = 'none';
+                });
+            
+            // 检查集合状态
             fetch("/admin/api/seat-groups")
                 .then(r => r.json())
                 .then(groups => {
@@ -493,9 +516,11 @@ function initStatus(){
 function submit(){
     let sid = document.getElementById("sid").value.trim();
     let sname = document.getElementById("sname").value.trim();
+    let lkey = document.getElementById("lkey").value.trim();
     let formData = new FormData();
     formData.append("student_id", sid);
     formData.append("student_name", sname);
+    formData.append("local_key", lkey);
 
     fetch("/ticket", { method: "POST", body: formData })
         .then(r => r.json())

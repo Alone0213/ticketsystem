@@ -22,6 +22,18 @@ th,td{border:1px solid #eee;padding:6px;text-align:left}
   <button onclick="closeTicketWindow()" style="background:#ffcccc;">关闭取票</button>
 </section>
 
+<section style="background:#f0e6ff; border:2px solid #9370db; padding:12px; margin-bottom:12px;">
+  <h3>本地密钥开关管理</h3>
+  <div style="margin-bottom:12px;">
+    <b>当前状态：</b> <span id="local-key-status-display" style="padding:4px 8px; border-radius:4px; background:#90EE90;">关闭</span>
+  </div>
+  <button onclick="openLocalKeySwitch()" style="background:#90EE90; margin-right:8px;">打开密钥</button>
+  <button onclick="closeLocalKeySwitch()" style="background:#ffcccc;">关闭密钥</button>
+  <div style="margin-top:12px; font-size:12px; color:#666;">
+    <p>💡 说明：打开时，前端会显示密钥输入框，用户需要扫线下二维码获取密钥才能领票</p>
+  </div>
+</section>
+
 <section style="background:#e6f3ff; border:2px solid #4169e1; padding:12px; margin-bottom:12px;">
   <h3>座位集合管理（仅在取票窗口开放时生效）</h3>
   <div id="seat-groups-info" style="margin-bottom:12px;"></div>
@@ -255,8 +267,30 @@ function delValid(v){
   fetchJson('/admin/api/validids/'+v, {method:'DELETE'}).then(()=>loadValidids()).catch(e=>alert(JSON.stringify(e)));
 }
 
+function openLocalKeySwitch(){
+  fetchJson('/admin/api/local-key-switch', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({is_open: 1})})
+    .then(()=>{updateLocalKeyStatus(); alert('本地密钥开关已打开');})
+    .catch(e=>alert('失败: '+JSON.stringify(e)));
+}
+
+function closeLocalKeySwitch(){
+  fetchJson('/admin/api/local-key-switch', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({is_open: 0})})
+    .then(()=>{updateLocalKeyStatus(); alert('本地密钥开关已关闭');})
+    .catch(e=>alert('失败: '+JSON.stringify(e)));
+}
+
+function updateLocalKeyStatus(){
+  fetchJson('/admin/api/local-key-switch').then(data=>{
+    let isOpen = Boolean(data.is_open);
+    let statusText = isOpen ? '打开中' : '关闭';
+    let statusColor = isOpen ? '#ffcc00' : '#90EE90';
+    document.getElementById('local-key-status-display').innerHTML = statusText;
+    document.getElementById('local-key-status-display').style.background = statusColor;
+  }).catch(e=>console.error(e));
+}
+
 // 初始加载
-updateTicketStatus(); loadStats(); loadSeats(); loadUsers(); loadValidids();
+updateTicketStatus(); updateLocalKeyStatus(); loadStats(); loadSeats(); loadUsers(); loadValidids();
 </script>
 </body>
 </html>
