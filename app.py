@@ -159,6 +159,35 @@ def auth_required(f):
     wrapper.__name__ = f.__name__
     return wrapper
 
+# ---------- 获取真实客户端 IP（支持 nginx 反代） ----------
+def get_client_ip():
+    """
+    获取真实客户端IP，支持nginx反代
+    
+    优先级：
+    1. X-Forwarded-For header（nginx反代常用）
+    2. X-Real-IP header（一些反代使用）
+    3. CF-Connecting-IP header（Cloudflare使用）
+    4. request.remote_addr（直连）
+    """
+    # 检查 X-Forwarded-For（可能包含多个IP，取第一个是原始客户端）
+    forwarded_for = request.headers.get('X-Forwarded-For')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    
+    # 检查 X-Real-IP
+    real_ip = request.headers.get('X-Real-IP')
+    if real_ip:
+        return real_ip.strip()
+    
+    # 检查 CF-Connecting-IP（Cloudflare）
+    cf_ip = request.headers.get('CF-Connecting-IP')
+    if cf_ip:
+        return cf_ip.strip()
+    
+    # 默认使用 remote_addr
+    return request.remote_addr
+
 # ------------ 首页（扫码跳转） ------------
 @app.route("/")
 def home():
@@ -175,7 +204,7 @@ def ticket():
     student_id = request.form.get("student_id", "").strip()
     student_name = request.form.get("student_name", "").strip()
     local_key = request.form.get("local_key", "").strip()
-    client_ip = request.remote_addr  # 获取客户端 IP 地址
+    client_ip = get_client_ip()  # 获取真实客户端 IP 地址（支持nginx反代）
 
     try:
         with get_db() as conn:
