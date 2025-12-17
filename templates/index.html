@@ -47,7 +47,7 @@ body::before {
 .navbar {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    padding: 25px;
+    padding: 20px;
     text-align: center;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     position: fixed;
@@ -394,30 +394,33 @@ button:hover {
 </div>
 
 <!-- 主容器：调整flex布局使其居中 -->
-<div style="display: flex; align-items: center; justify-content: center; flex: 1; padding: 20px;">
-<div class="container">
-    <h2>领票入口</h2>
-    <div id="status-info"></div>
-    <div class="form-group">
-        <input id="sid" placeholder="请输入学号">
-    </div>
-    <div class="form-group">
-        <input id="sname" placeholder="请输入姓名" hidden>
-    </div>
-    <div class="form-group" id="local-key-group" style="display: none;">
-        <input id="lkey" placeholder="请输入密钥" type="password">
-    </div>
-    <button onclick="submit()">确认领取</button>
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 20px;">
+    <div class="container">
+        <h2>领票入口</h2>
+        <div id="status-info"></div>
+        <div class="form-group">
+            <input id="sid" placeholder="请输入学号">
+        </div>
+        <div class="form-group">
+            <input id="sname" placeholder="请输入姓名" hidden>
+        </div>
+        <div class="form-group" id="local-key-group" style="display: none;">
+            <input id="lkey" placeholder="请输入密钥" type="password">
+        </div>
+        <button onclick="submit()">确认领取</button>
 
-    <div id="available-seats">
-        <b>剩余座位数：</b><span id="seats-count">--</span> / <span id="seats-total">--</span>
+        <div id="available-seats">
+            <b>剩余座位数：</b><span id="seats-count">--</span> / <span id="seats-total">--</span>
+        </div>
+
+        <div id="result"></div>
+
+        <!-- 说明信息模块 -->
+        <div class="info-section" id="info-section-display"></div>
     </div>
-
-    <div id="result"></div>
-
-    <!-- 说明信息模块 -->
-    <div class="info-section" id="info-section-display"></div>
-</div>
+    
+    <!-- 座位信息图片 -->
+    <img src="/static/pics/seatsinfo.jpg" alt="座位信息" style="width: 100%; max-width: 500px; margin-top: 20px; border-radius: 8px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); position: relative; z-index: 2;">
 </div>
 
 <!-- 页脚 -->
