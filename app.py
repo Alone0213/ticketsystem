@@ -287,8 +287,11 @@ def ticket():
                     SELECT pos, row_num, col_num FROM seats WHERE seat_id = ?
                 ''', (seat_id,))
                 seat = cursor.fetchone()
-                # 计算该座位的票号（已占座位数中的序号）
-                cursor.execute('SELECT COUNT(*) as cnt FROM seats WHERE occupied = 1 AND seat_id <= ?', (seat_id,))
+                # 计算票号：根据student_id在users表中是第几行（按插入顺序）
+                cursor.execute('''
+                    SELECT COUNT(*) as cnt FROM users WHERE rowid <= 
+                    (SELECT rowid FROM users WHERE student_id = ?)
+                ''', (student_id,))
                 ticket_seq = cursor.fetchone()['cnt']
                 ticket_no = f"NO.251221{ticket_seq:03d}"
                 return jsonify({
@@ -339,8 +342,8 @@ def ticket():
                          (client_ip, student_id))
             
             conn.commit()
-            # 计算当前已占座位数，作为票号序列（001..267）
-            cursor.execute('SELECT COUNT(*) as cnt FROM seats WHERE occupied = 1')
+            # 计算票号：users表中的数据行数（新领票用户已插入，其行号就是此时的count）
+            cursor.execute('SELECT COUNT(*) as cnt FROM users')
             occupied_cnt = cursor.fetchone()['cnt']
             ticket_no = f"NO.251221{occupied_cnt:03d}"
             return jsonify({
